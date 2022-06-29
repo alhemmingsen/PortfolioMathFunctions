@@ -1,0 +1,242 @@
+Function Overlap_Calc(X As Range, y As Range)
+
+'This will calculate the overlap of two portfolios
+
+Dim i As Integer
+Dim j As Integer
+Dim v1 As Variant
+Dim v2 As Variant
+Dim Totalv1 As Variant
+Dim Totalv2 As Variant
+
+Totalv1 = 0
+Totalv2 = 0
+
+Set rng1 = X
+Set rng2 = y
+
+'Runs a Vlookup For The 1st Portfolio within the 2nd Portfolio
+
+For i = 1 To rng1.Count
+If rng1.Cells(i, 2).Value = 0 Then
+GoTo Skip
+Else
+v1 = Application.VLookup(rng1.Cells(i, 1), rng2, 2, False)
+End If
+If IsError(v1) Then v1 = 0
+'Else v1 = Application.VLookup(rng1.Cells(i, 1), rng2, 2, False)
+Totalv1 = Totalv1 + v1
+
+Skip: Next i
+
+'Runs a Vlookup For The 2nd Portfolio within the 1st Portfolio
+For j = 1 To rng2.Count
+If rng2.Cells(j, 2).Value = 0 Then
+GoTo Skip2
+Else
+v2 = Application.VLookup(rng2.Cells(j, 1), rng1, 2, False)
+End If
+If IsError(v2) Then v2 = 0
+
+'Else v2 = Application.VLookup(rng2.Cells(j, 1), rng1, 2, False)
+Totalv2 = Totalv2 + v2
+
+
+Skip2: Next j
+
+'Calculates the Total Weights in each portfolio
+Weight1 = Application.Sum(rng1.Columns(2))
+Weight2 = Application.Sum(rng2.Columns(2))
+CombinedWeight = Weight1 + Weight2
+
+Overlap_Calc = (Totalv1 + Totalv2) / (CombinedWeight)
+
+End Function
+
+Function Portfolio_Covariance(Volatilities, Correlations)
+' computes covariance matrix from sd and correlation coefficients: C = (sd*sd')*cc
+
+With Application
+    sd = .Transpose(.Transpose(Volatilities))
+    cc = .Transpose(.Transpose(Correlations))
+End With
+
+n = UBound(cc, 1)
+
+ReDim CV(1 To n, 1 To n)
+
+For i = 1 To n
+    For j = 1 To n
+        CV(i, j) = cc(i, j) * sd(i, 1) * sd(j, 1)
+    Next j
+Next i
+
+Portfolio_Covariance = CV
+
+End Function
+
+
+
+Function Portfolio_Volatility(weights, Volatilities, Correlations)
+' computes standard deviation of portfolio x from covariance cv
+
+With Application
+    sd = .Transpose(.Transpose(Volatilities))
+    cc = .Transpose(.Transpose(Correlations))
+    X = .Transpose(.Transpose(weights))
+End With
+
+n = UBound(cc, 1)
+
+'dim and calculate covariances as cv
+ReDim CV(1 To n, 1 To n)
+For i = 1 To n
+    For j = 1 To n
+        CV(i, j) = cc(i, j) * sd(i, 1) * sd(j, 1)
+    Next j
+Next i
+
+
+
+n = UBound(X, 1)
+
+V = 0
+
+For i = 1 To n
+    For j = 1 To n
+        V = V + X(i, 1) * X(j, 1) * CV(i, j)
+    Next j
+Next i
+
+Portfolio_Volatility = V ^ 0.5
+
+End Function
+
+Function CorrelationofTwoPortfolios(Weights1, Weights2, Volatilities, Correlations)
+
+
+'for two portfolios, compute the correlation between the two
+
+With Application
+    X = .Transpose(.Transpose(Weights1))
+    x2 = .Transpose(.Transpose(Weights2))
+    sd = .Transpose(.Transpose(Volatilities))
+    cc = .Transpose(.Transpose(Correlations))
+End With
+
+
+n = UBound(cc, 1)
+
+'dim and calculate covariances as cv
+ReDim CV(1 To n, 1 To n)
+For i = 1 To n
+    For j = 1 To n
+        CV(i, j) = cc(i, j) * sd(i, 1) * sd(j, 1)
+    Next j
+Next i
+
+
+n = UBound(X, 1)
+
+'compute the covariance of the portfolios
+
+Var = 0
+
+For i = 1 To n
+    For j = 1 To n
+        Var = Var + X(i, 1) * x2(j, 1) * CV(i, j)
+    Next j
+Next i
+
+'compute the vol of portfolio 1
+Vol1 = 0
+
+For i = 1 To n
+    For j = 1 To n
+        Vol1 = Vol1 + X(i, 1) * X(j, 1) * CV(i, j)
+    Next j
+Next i
+Vol1 = Vol1 ^ 0.5
+
+'compute the vol of portfolio 2
+vol2 = 0
+
+For i = 1 To n
+    For j = 1 To n
+        vol2 = vol2 + x2(i, 1) * x2(j, 1) * CV(i, j)
+    Next j
+Next i
+vol2 = vol2 ^ 0.5
+
+CorrelationofTwoPortfolios = Var / (Vol1 * vol2)
+End Function
+
+
+
+
+
+Function RiskDecomp(Volatilities, Correlations, weights)
+
+'convert to arrays
+With Application
+    sd = .Transpose(.Transpose(Volatilities))
+    cc = .Transpose(.Transpose(Correlations))
+    wt = .Transpose(.Transpose(weights))
+End With
+
+n = UBound(cc, 1)
+
+'dim covariance matrix
+ReDim CV(1 To n, 1 To n)
+
+For i = 1 To n
+    For j = 1 To n
+        CV(i, j) = cc(i, j) * sd(i, 1) * sd(j, 1)
+    Next j
+Next i
+
+'dim product of weights matrix
+ReDim wtproduct(1 To n, 1 To n)
+For i = 1 To n
+    For j = 1 To n
+        wtproduct(i, j) = wt(i, 1) * wt(j, 1)
+    Next j
+Next i
+
+'dim var contributions matrix
+ReDim Varcontributions(1 To n, 1 To n)
+For i = 1 To n
+    For j = 1 To n
+        Varcontributions(i, j) = wtproduct(i, j) * CV(i, j)
+    Next j
+Next i
+
+
+
+'dim for the total portfolio volatility
+TotalVar = 0
+totalvol = 0
+
+For i = 1 To n
+    For j = 1 To n
+        TotalVar = TotalVar + wt(i, 1) * wt(j, 1) * CV(i, j)
+    Next j
+Next i
+
+totalvol = TotalVar ^ 0.5
+
+'dim a vertical risk contribution matrix
+'will take the square matrix and add up the vertical contributions
+ReDim varvertical(1 To n, 0)
+For i = 1 To n
+varvertical(i, 0) = 0
+    For j = 1 To n
+    varvertical(i, 0) = varvertical(i, 0) + Varcontributions(i, j)
+    Next j
+Next i
+
+For i = 1 To n
+    varvertical(i, 0) = varvertical(i, 0) / TotalVar * totalvol
+Next i
+RiskDecomp = varvertical
+End Function
