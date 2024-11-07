@@ -1,4 +1,4 @@
-Function Overlap_Calc(X As Range, y As Range)
+Function Overlap_Calc(x As Range, y As Range)
 
 'This will calculate the overlap of two portfolios
 
@@ -12,7 +12,7 @@ Dim Totalv2 As Variant
 Totalv1 = 0
 Totalv2 = 0
 
-Set rng1 = X
+Set rng1 = x
 Set rng2 = y
 
 'Runs a Vlookup For The 1st Portfolio within the 2nd Portfolio
@@ -45,8 +45,8 @@ Totalv2 = Totalv2 + v2
 Skip2: Next j
 
 'Calculates the Total Weights in each portfolio
-Weight1 = Application.Sum(rng1.Columns(2))
-Weight2 = Application.Sum(rng2.Columns(2))
+Weight1 = Application.Sum(rng1.columns(2))
+Weight2 = Application.Sum(rng2.columns(2))
 CombinedWeight = Weight1 + Weight2
 
 Overlap_Calc = (Totalv1 + Totalv2) / (CombinedWeight)
@@ -83,7 +83,7 @@ Function Portfolio_Volatility(weights, Volatilities, Correlations)
 With Application
     sd = .Transpose(.Transpose(Volatilities))
     cc = .Transpose(.Transpose(Correlations))
-    X = .Transpose(.Transpose(weights))
+    x = .Transpose(.Transpose(weights))
 End With
 
 n = UBound(cc, 1)
@@ -98,13 +98,13 @@ Next i
 
 
 
-n = UBound(X, 1)
+n = UBound(x, 1)
 
 V = 0
 
 For i = 1 To n
     For j = 1 To n
-        V = V + X(i, 1) * X(j, 1) * CV(i, j)
+        V = V + x(i, 1) * x(j, 1) * CV(i, j)
     Next j
 Next i
 
@@ -118,7 +118,7 @@ Function CorrelationofTwoPortfolios(Weights1, Weights2, Volatilities, Correlatio
 'for two portfolios, compute the correlation between the two
 
 With Application
-    X = .Transpose(.Transpose(Weights1))
+    x = .Transpose(.Transpose(Weights1))
     x2 = .Transpose(.Transpose(Weights2))
     sd = .Transpose(.Transpose(Volatilities))
     cc = .Transpose(.Transpose(Correlations))
@@ -136,7 +136,7 @@ For i = 1 To n
 Next i
 
 
-n = UBound(X, 1)
+n = UBound(x, 1)
 
 'compute the covariance of the portfolios
 
@@ -144,7 +144,7 @@ Var = 0
 
 For i = 1 To n
     For j = 1 To n
-        Var = Var + X(i, 1) * x2(j, 1) * CV(i, j)
+        Var = Var + x(i, 1) * x2(j, 1) * CV(i, j)
     Next j
 Next i
 
@@ -153,7 +153,7 @@ Vol1 = 0
 
 For i = 1 To n
     For j = 1 To n
-        Vol1 = Vol1 + X(i, 1) * X(j, 1) * CV(i, j)
+        Vol1 = Vol1 + x(i, 1) * x(j, 1) * CV(i, j)
     Next j
 Next i
 Vol1 = Vol1 ^ 0.5
@@ -240,3 +240,471 @@ For i = 1 To n
 Next i
 RiskDecomp = varvertical
 End Function
+
+
+
+
+Public Function SNorm(z)
+   'used in black Scholes functions
+    c1 = 2.506628
+    c2 = 0.3193815
+    c3 = -0.3565638
+    c4 = 1.7814779
+    c5 = -1.821256
+    c6 = 1.3302744
+    If z > 0 Or z = 0 Then
+              W = 1
+    Else: W = -1
+    End If
+    y = 1 / (1 + 0.2316419 * W * z)
+    SNorm = 0.5 + W * (0.5 - (Exp(-z * z / 2) / c1) * _
+            (y * (c2 + y * (c3 + y * (c4 + y * (c5 + y * c6))))))
+            
+End Function
+
+
+
+Function BlackScholesCall(SecurityPrice, ExercisePrice, TimeToExpiration, RiskFreeRate, Volatility)
+'price a call on Strick price Xercise price Time to expiration (in fractions of a year), Riskfree rate and SD (vol)
+    Dim a As Single
+    Dim b As Single
+    Dim C As Single
+    Dim d1 As Single
+    Dim d2 As Single
+
+    a = Log(SecurityPrice / ExercisePrice)
+    b = (RiskFreeRate + 0.5 * Volatility ^ 2) * TimeToExpiration
+    C = Volatility * (TimeToExpiration ^ 0.5)
+    d1 = (a + b) / C
+    d2 = d1 - Volatility * (TimeToExpiration ^ 0.5)
+    BlackScholesCall = SecurityPrice * SNorm(d1) - ExercisePrice * Exp(-RiskFreeRate * TimeToExpiration) * SNorm(d2)
+    
+End Function
+
+
+Function BlackScholesPut(SecurityPrice, ExercisePrice, TimeInYears, RiskFreeRate, Volatility)
+'price a put on Strick price Xercise price Time to expiration (in fractions of a year), Riskfree rate and SD (vol)
+    Dim a As Single
+    Dim b As Single
+    Dim C As Single
+    Dim d1 As Single
+    Dim d2 As Single
+    Dim BlackscholesCall2 As Double
+
+    a = Log(SecurityPrice / ExercisePrice)
+    b = (RiskFreeRate + 0.5 * Volatility ^ 2) * TimeInYears
+    C = Volatility * (TimeInYears ^ 0.5)
+    d1 = (a + b) / C
+    d2 = d1 - Volatility * (TimeInYears ^ 0.5)
+    BlackscholesCall2 = SecurityPrice * SNorm(d1) - ExercisePrice * Exp(-RiskFreeRate * TimeInYears) * SNorm(d2)
+    BlackScholesPut = ExercisePrice * Exp(-RiskFreeRate * TimeInYears) - SecurityPrice + BlackscholesCall2
+    
+End Function
+
+
+Function Principal_Components(MATin As Range)
+
+'calculate principal component factors from a given correlation matrix
+
+Dim MAT() As Variant, volatilityMAT#(), normalize#(), correlMAT#()
+Dim covMAT#(), eigenVectors#(), principalComponents() As Variant
+Dim avg As Double, rows As Double, columns As Double
+
+MAT = MATin
+avg = Application.WorksheetFunction.Average(MAT)
+rows = UBound(MAT, 1)
+columns = UBound(MAT, 2)
+
+
+For x = 1 To rows
+    For y = 1 To columns
+        MAT(x, y) = MAT(x, y) - avg
+    Next y
+Next x
+
+ReDim covMAT(1 To columns, 1 To columns)
+For x = 1 To columns
+    For y = 1 To columns
+        covMAT(x, y) = Application.WorksheetFunction.Covariance_S(Application.Index(MAT, , x), Application.Index(MAT, , y))
+    Next y
+Next x
+
+eigenVectors = MatEigenvector_pow(covMAT, True)
+
+principalComponents = Application.WorksheetFunction.MMult(Application.WorksheetFunction.Transpose(eigenVectors), Application.WorksheetFunction.Transpose(MAT))
+
+Principal_Components = Application.WorksheetFunction.Transpose(principalComponents)
+
+End Function
+
+Function CORRELMATRIX(dataRange As Object) As Variant
+'from an vertical array of N return streams, generate a nXn correlation matrix
+On Error GoTo 20
+Dim R As Integer, n As Integer, rr As Integer, i As Integer, j As Integer, k As Integer, doit As Integer
+Dim x() As Variant, mc() As Double, ss() As Double, m() As Double, ob As Object
+R = dataRange.rows.Count
+n = dataRange.columns.Count
+ReDim ss(1 To n, 1 To n), m(1 To n), x(1 To n), mc(1 To n, 1 To n)
+rr = R
+For i = 1 To R
+   doit = 0
+   For j = 1 To n
+      Set ob = dataRange.Cells(i, j)
+      doit = doit + Application.Count(ob)
+      x(j) = ob.Value
+   Next j
+   If doit = n Then
+      For j = 1 To n
+         m(j) = m(j) + x(j)
+         For k = 1 To j
+            ss(j, k) = ss(j, k) + x(j) * x(k)
+         Next k
+      Next j
+   Else
+      rr = rr - 1
+   End If
+Next i
+For j = 1 To n
+ ss(j, j) = (ss(j, j) - m(j) * m(j) / rr) ^ 0.5
+   mc(j, j) = 1
+   For k = 1 To j - 1
+      ss(j, k) = ss(j, k) - m(j) * m(k) / rr
+      mc(j, k) = ss(j, k) / (ss(j, j) * ss(k, k))
+      mc(k, j) = mc(j, k)
+   Next k
+Next j
+CORRELMATRIX = mc
+Exit Function
+20 CORRELMATRIX = CVErr(xlErrValue)
+End Function
+
+
+Function CORANDMATRIX(correlArray, Optional RANDsource) As Variant
+'from a nxn correlation matrix generate a 1xn matrix of correlated uniform random variables between 0 and 1 compliant with that correlation matrix
+Application.Volatile (IsError(Application.Index(RANDsource, 1, 2)))
+On Error GoTo 19
+Dim n As Integer, i As Integer, j As Integer, k As Integer, x() As Single, y() As Single, a() As Single, m As Integer, l As Single
+If IsObject(correlArray) Then
+   n = correlArray.columns.Count
+ElseIf IsArray(correlArray) Then
+   n = UBound(correlArray, 2) + 1 - LBound(correlArray, 2)
+Else: n = 1
+End If
+ReDim a(1 To n, 1 To n)
+If n > 2 Then
+   m = n
+   l = 0.999999
+Else
+   m = 2
+   l = 1
+End If
+ReDim y(1 To m), x(1 To m)
+If IsMissing(RANDsource) Then
+   For i = 1 To m - 1
+      x(i) = Application.NormSInv(Rnd)
+   Next i
+   y(m) = Rnd
+ElseIf IsError(Application.Index(RANDsource, 1, 2)) Then
+   For i = 1 To m - 1
+      x(i) = Application.NormSInv(Rnd)
+   Next i
+   y(m) = RANDsource
+Else
+   For i = 1 To m - 1
+      x(i) = Application.NormSInv(Application.Index(RANDsource, 1, i))
+   Next i
+   y(m) = Application.Index(RANDsource, 1, m)
+   If Not IsError(Application.Index(RANDsource, 1, m + 1)) Then GoTo 19
+End If
+a(n, n) = Application.Index(correlArray, n, n)
+x(m) = Application.NormSInv(y(m))
+If n = 1 Then
+   x(1) = a(1, 1) * x(2) + ((1 - a(1, 1) ^ 2) ^ 0.5) * x(1)
+   y(1) = Application.NormSDist(x(1))
+   CORAND = y
+   Exit Function
+End If
+If a(n, n) <> 1 Then GoTo 19
+For j = n - 1 To 1 Step -1
+   a(j, j) = Application.Index(correlArray, j, j)
+   If a(j, j) <> 1 Then GoTo 19
+   y(j) = 0
+   For k = n To j + 1 Step -1
+      a(k, j) = Application.Index(correlArray, k, j) * l
+      For i = k + 1 To n
+         a(k, j) = a(k, j) - a(i, j) * a(i, k)
+      Next i
+      If a(k, j) <> 0 Then a(k, j) = a(k, j) / a(k, k)
+          y(j) = y(j) + a(k, j) * x(k)
+      a(j, j) = a(j, j) - a(k, j) ^ 2
+   Next k
+   a(j, j) = a(j, j) ^ 0.5
+   y(j) = Application.NormSDist(y(j) + a(j, j) * x(j))
+Next j
+CORANDMATRIX = y
+Exit Function
+19 CORANDMATRIX = CVErr(xlErrValue)
+End Function
+
+
+Public Function MatEigenvalue_pow(MAT, Optional Itermax)
+'returns all eigenvalues using the power algorithm and the matrix reduce method
+Dim a, ErrMsg$, Ua#(), V#()
+a = MAT
+If UBound(a, 1) <> UBound(a, 2) Then
+    ErrMsg = "?":  Exit Function
+End If
+'set default
+If IsMissing(Itermax) Then Itermax = 1000
+'search all eigenvalue and associated eigenvector with power algorithm
+Eigen_Power_All a, Ua, V, ErrMsg, Itermax
+If ErrMsg <> "" Then
+    MatEigenvalue_pow = "convergence fails"
+Else
+    MatEigenvalue_pow = PasteVector(V)
+End If
+End Function
+
+Public Function MatEigenvector_pow(MAT, Optional norm, Optional Itermax)
+'returns all eigenvalues using the power algorithm and the matrix reduce method
+Dim a, ErrMsg$, Ua#(), V#()
+a = MAT
+If UBound(a, 1) <> UBound(a, 2) Then
+    ErrMsg = "?":  Exit Function
+End If
+'set default
+If IsMissing(norm) Then norm = False
+If IsMissing(Itermax) Then Itermax = 1000
+'search all eigenvalue and associated eigenvector with power algorithm
+Eigen_Power_All a, Ua, V, ErrMsg, Itermax
+If ErrMsg = "" Then
+    If norm Then NormalizeMatrix Ua, 2
+    MatEigenvector_pow = Ua
+Else
+    MatEigenvector_pow = "?"
+End If
+End Function
+
+Private Sub Eigen_Power_All(a, Ua#(), V#(), ErrMsg$, ByVal Itermax&)
+'Find all eigenvalues and eigenvectors. 2-11-02 by Leonardo Volpi
+'Uses the power algorithm and the matrix reduction method
+'A matrix [n x n]
+'Ua = eigenvector [n x n] of A
+'v  = eigenvalues [n] of A
+Dim U#(), b#(), ub#(), W#(), ID() As Boolean, IterCounter&, IterErr#
+Dim EigMax#, tmp#(), n&, m&, i&, j&, k&, First_1_Element&
+Dim s1#, s2#
+Const tiny = 10 ^ -15
+'intialize
+ErrMsg = ""
+If UBound(a, 1) <> UBound(a, 2) Then
+    ErrMsg = "?":  GoTo HerrorHandler
+End If
+n = UBound(a, 1)
+ReDim Ua(1 To n, 1 To n), U(1 To n, 1 To n), tmp(1 To n, 1 To n), W(1 To n, 1 To n)
+ReDim V(1 To n), ID(1 To n)
+For i = 1 To n: ID(i) = True: Next i
+k = 1
+Do
+    m = n - k + 1
+    'initialize and extract the reduced matrix
+    ReDim b(1 To m, 1 To m), ub(1 To m)
+    i1 = 0
+    For i = 1 To n
+        If ID(i) Then
+            i1 = i1 + 1: j1 = 0
+            For j = 1 To n
+                If ID(j) Then
+                    j1 = j1 + 1
+                    b(i1, j1) = a(i, j)
+                End If
+            Next j
+        End If
+    Next i
+    
+    'search for the dominant eigenvalues and relative eigenvector
+    Eigen_Power b, EigMax, ub, Itermax, IterErr, IterCounter
+    If IterCounter > Itermax And IterErr > 10 ^ 6 * tiny Then GoTo HerrorHandler
+    'save results
+    V(k) = EigMax
+    i1 = 0
+    For i = 1 To n
+        If ID(i) Then
+            i1 = i1 + 1
+            U(i, k) = ub(i1)
+        End If
+    Next i
+    'search for first 1 - element
+    For i = 1 To n
+        If U(i, k) = 1 Then
+            First_1_Element = i
+            Exit For
+        End If
+    Next i
+    'save First_1_Element-row
+    For j = 1 To n
+        W(k, j) = a(First_1_Element, j)
+    Next j
+    'compute new reduce matrix
+    For i = 1 To n
+    For j = 1 To n
+        tmp(i, j) = U(i, k) * a(First_1_Element, j)
+    Next j
+    Next i
+    For i = 1 To n
+    For j = 1 To n
+        a(i, j) = a(i, j) - tmp(i, j)
+    Next j
+    Next i
+    k = k + 1
+    ID(First_1_Element) = False
+    'Dump_Matrix A '>>>>>>>>>>>>>>>>>>>>> DEBUG
+    'Dump_Matrix U '>>>>>>>>>>>>>>>>>>>>> DEBUG
+    'Dump_Matrix w '>>>>>>>>>>>>>>>>>>>>> DEBUG
+Loop Until k > n
+'eigenvector transformation
+For k = 1 To n
+    For i = 1 To n
+        Ua(i, k) = U(i, k)
+    Next i
+    For j = 1 To k - 1
+        s1 = V(k) - V(k - j)
+        s2 = 0
+        For i = 1 To n
+            s2 = s2 + W(k - j, i) * Ua(i, k)
+        Next i
+        For i = 1 To n
+            Ua(i, k) = s1 * Ua(i, k) + s2 * U(i, k - j)
+        Next i
+    Next j
+    'rescaling each vector to its max value
+    s1 = 0 '
+    For i = 1 To n
+        If Abs(Ua(i, k)) > Abs(s1) Then s1 = Ua(i, k)
+    Next i
+    If s1 <> 0 Then
+        For i = 1 To n
+            Ua(i, k) = Ua(i, k) / s1
+        Next i
+    End If
+Next k
+    'Dump_Matrix Ua '>>>>>>>>>>>>>>>>>>>>> DEBUG
+Exit Sub
+HerrorHandler:
+ErrMsg = "dubious accuarcy"
+End Sub
+Private Function PasteVector(V)
+'Paste a vector in horizontal or vertical mode depending on selected cells
+On Error GoTo Error_Handler
+If Application.Caller.rows.Count > 1 Then
+    PasteVector = Application.WorksheetFunction.Transpose(V)
+Else
+    PasteVector = V
+End If
+Exit Function
+Error_Handler:
+    PasteVector = V
+End Function
+
+Private Sub NormalizeMatrix(a, ByVal NormType, Optional tiny)
+'NormType = 1 (scaled to max) ,  2 (modulo=1),  3 (scaled to min)
+'mod. 20-12-03
+If IsMissing(tiny) Then tiny = 2 * 10 ^ -14
+n = UBound(a, 1)
+m = UBound(a, 2)
+n_min = LBound(a, 1)
+m_min = LBound(a, 2)
+'mop-up
+For j = m_min To m
+For i = n_min To n
+    If Abs(a(i, j)) < tiny Then a(i, j) = 0  '20-12-03
+Next i, j
+'normalize
+For j = m_min To m
+    Select Case NormType
+        Case 2  'module =1
+            s1 = 0 '
+            For i = n_min To n
+                 s1 = s1 + a(i, j) ^ 2
+            Next i
+            s1 = Sqr(s1)
+        Case 3  'max element =1
+            s1 = 0 '
+            For i = n_min To n
+                If Abs(a(i, j)) > Abs(s1) Then s1 = a(i, j)
+            Next i
+        Case 1  'min element =1
+            s1 = 10 ^ 300
+            For i = n_min To n   'fix bug 10.5.2003 VL
+                If Abs(a(i, j)) < Abs(s1) And Abs(a(i, j)) > 0 Then s1 = a(i, j)
+            Next i
+    End Select
+    If Abs(s1) > tiny Then  'fix bug for null vectors . 6-6-05 VL
+        For i = n_min To n
+            a(i, j) = a(i, j) / s1
+        Next i
+    End If
+Next j
+End Sub
+
+Private Sub Eigen_Power(a, Eigenvalue_max, Eigenvector_max#(), ByVal Itermax&, Optional IterErr#, Optional IterCounter&)
+'Computes the max eigenvalue and eigenvector of matrix A with power method
+'IterCount= iteration counter
+'ErrMax = Set the Max error allowed
+Dim V, U#(), U0#(), R#, r0#, n&, Err_value#, Err_vector#, U_norm#
+Const tiny = 10 ^ -15
+If UBound(a, 1) <> UBound(a, 2) Then
+    ErrMsg = "Matrix must be square": Exit Sub
+End If
+n = UBound(a, 1)
+ReDim U(1 To n, 1 To 1), U0(1 To n, 1 To 1)
+ReDim Eigenvector_max(1 To n)
+If n = 1 Then
+    Eigenvalue_max = a(1, 1)
+    Eigenvector_max(1) = 1
+    ErrMsg = ""
+    Exit Sub
+End If
+'initialize starting vector
+Randomize
+For i = 1 To n
+    U(i, 1) = CDbl(Rnd)
+    'U(i, 1) = 1
+Next
+r0 = 0
+IterCounter = 0
+Do
+    'multiplication matrix
+    V = Application.WorksheetFunction.MMult(a, U)
+    'Rayleigh coefficient computing
+    s1 = 0: s2 = 0
+    For i = 1 To n
+        s1 = s1 + V(i, 1) * U(i, 1)
+        s2 = s2 + U(i, 1) * U(i, 1)
+    Next
+    R = s1 / s2 'Rayleigh coefficient
+    U_norm = Sqr(s2) 'norma of U
+    s1 = 0: Err_vector = 0
+    For i = 1 To n
+        U(i, 1) = V(i, 1) / U_norm 'load and rescaling next vector
+        Err_vector = Err_vector + Abs(U(i, 1) - U0(i, 1)) 'vector error evaluation
+        U0(i, 1) = U(i, 1)    'save current vector
+    Next
+    If s1 > 1 Then Err_vector = Err_vector / s1
+    'eigenvalue error
+    IterErr = Abs(R - r0)
+    If Abs(R) > 1 Then IterErr = IterErr / Abs(R)
+    r0 = R
+    IterCounter = IterCounter + 1
+Loop While IterCounter < Itermax And (IterErr > tiny Or Err_vector > tiny)
+Eigenvalue_max = R
+'normalize to max value
+R = 0
+For i = 1 To n
+    If Abs(U(i, 1)) > Abs(R) Then R = U(i, 1)
+Next
+For i = 1 To n
+    Eigenvector_max(i) = U(i, 1) / R
+Next i
+
+End Sub
